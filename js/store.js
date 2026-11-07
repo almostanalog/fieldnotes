@@ -107,7 +107,7 @@ export const TEMPLATES = {
   books:  { label: 'Books', type: 'table', hint: 'Table: title, author, status, rating, tags',
             make: () => ({ columns: [
               col('Title', 'text'), col('Author', 'text'),
-              col('Status', 'select', { options: ['Want to read', 'Reading', 'Read'] }),
+              col('Status', 'select', { options: ['Want to read', 'Reading', 'Read', "Didn't finish"] }),
               col('Rating', 'rating'), col('Finished', 'date'), col('Tags', 'tags'),
             ] }) },
   ideas:  { label: 'Ideas', type: 'notes', hint: 'One card per idea, quick to jot down',

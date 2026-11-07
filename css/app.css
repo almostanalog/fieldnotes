@@ -288,6 +288,14 @@ input.cell.empty:not(:focus) { color: var(--ink-3); }
 .fields td { border: var(--b) solid var(--ink); padding: 0; }
 .row-actions { margin-top: 30px; }
 
+/* status chips above a table */
+.status-bar { display: flex; gap: 8px; margin-bottom: 16px; overflow-x: auto; scrollbar-width: none; padding: 0 3px 3px 0; }
+.status-bar::-webkit-scrollbar { display: none; }
+.st-chip { flex: none; display: inline-flex; align-items: center; gap: 8px; border: var(--b) solid var(--ink); background: var(--paper); padding: 5px 10px; font: 700 11px/1.2 var(--mono); text-transform: uppercase; letter-spacing: .05em; cursor: pointer; white-space: nowrap; box-shadow: 2px 2px 0 var(--shadow); }
+.st-chip:hover { background: var(--paper-2); }
+.st-chip.on { background: var(--ink); color: var(--paper); }
+.st-n { font-weight: 400; opacity: .6; }
+
 /* ---- modal / menu / toast ---- */
 
 .modal-back { position: fixed; inset: 0; background: rgba(20, 20, 20, .35); display: grid; place-items: center; padding: 16px; z-index: 50; }

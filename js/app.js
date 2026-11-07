@@ -562,9 +562,50 @@ function cmpVal(a, b, type) {
   return S.toText(a, type).localeCompare(S.toText(b, type), undefined, { numeric: true, sensitivity: 'base' });
 }
 
+// ---- status filter ------------------------------------------------------------------
+// A table with a select column called Status (or Shelf/State) gets a row of chips above it:
+// one per status plus All. The choice is remembered per device. Changing a row's status
+// moves it out of the current view as soon as the edit is done.
+
+const SHOW_KEY = 'notebook.show';
+const shown = (() => { try { return JSON.parse(localStorage.getItem(SHOW_KEY)) || {}; } catch { return {}; } })();
+const statusCol = c => c.columns.find(k => k.type === 'select' && /^(status|shelf|state)$/i.test(k.name.trim()));
+function statusValues(c, k) {
+  const used = c.rows.map(r => r.cells[k.id]).filter(Boolean);
+  return [...new Set([...(k.options || []), ...used])];
+}
+function activeStatus(c) {
+  const k = statusCol(c), v = shown[c.id];
+  return k && v && statusValues(c, k).includes(v) ? v : null;
+}
+function setShown(c, v) {
+  if (v) shown[c.id] = v; else delete shown[c.id];
+  try { localStorage.setItem(SHOW_KEY, JSON.stringify(shown)); } catch {}
+  render();
+}
+function StatusBar(c) {
+  const k = statusCol(c);
+  if (!k || !c.rows.length) return null;
+  const cur = activeStatus(c);
+  const count = v => c.rows.filter(r => r.cells[k.id] === v).length;
+  const chip = (label, v, n) => h('button', { class: 'st-chip' + (cur === v ? ' on' : ''), 'aria-pressed': String(cur === v),
+    onclick: () => setShown(c, v) }, label, h('span', { class: 'st-n' }, n));
+  return h('div', { class: 'status-bar', role: 'group', 'aria-label': 'Show ' + k.name },
+    statusValues(c, k).map(v => chip(v, v, count(v))),
+    chip('All', null, c.rows.length));
+}
+// New rows made while a status is showing start with that status, so they don't vanish.
+function newRowIn(c) {
+  const r = S.newRow(c), v = activeStatus(c);
+  if (v) r.cells[statusCol(c).id] = v;
+  return r;
+}
+
 function visibleRows(c) {
   const q = (ui.filter[c.id] || '').trim().toLowerCase();
   let rows = c.rows;
+  const st = activeStatus(c);
+  if (st) { const k = statusCol(c); rows = rows.filter(r => r.cells[k.id] === st); }
   if (q) rows = rows.filter(r => c.columns.some(k => S.toText(r.cells[k.id], k.type).toLowerCase().includes(q)));
   const k = c.sort && c.columns.find(x => x.id === c.sort.col);
   if (k) {
@@ -608,7 +649,7 @@ function TableView(c, tools) {
     }),
     h('th', { class: 't-actions' }, h('button', { class: 'icon-btn', title: 'Add column', onclick: () => editColumn(c, null) }, '+')));
   const addRow = () => {
-    const r = S.newRow(c);
+    const r = newRowIn(c);
     ui.focus = `tr[data-id="${r.id}"] .cell`;
     S.commit();
   };
@@ -617,6 +658,7 @@ function TableView(c, tools) {
       value: ui.filter[c.id] || '', oninput: e => { ui.filter[c.id] = e.target.value; fillBody(); } }),
     h('button', { class: 'btn primary', onclick: addRow }, '+ Row'));
   return h('div', { class: 'tableview' },
+    StatusBar(c),
     h('div', { class: 'table-wrap' }, h('table', { class: 'grid-table' }, h('thead', {}, head), tbody)),
     !c.rows.length && h('div', { class: 'empty-state' }, 'No rows yet. Add one, or bring in a CSV from the ⋯ menu.'));
 }
@@ -638,12 +680,12 @@ function TableList(c, tools) {
   };
   fill();
   tools.push(h('button', { class: 'btn primary', onclick: () => {
-    const r = S.newRow(c);
+    const r = newRowIn(c);
     S.commit(false);
     ui.pendingRow = { cid: c.id, rid: r.id };
     go(`#/c/${c.id}/r/${r.id}`);
   } }, '+ Add'));
-  return h('div', { class: 'tableview narrow' }, listEl);
+  return h('div', { class: 'tableview narrow' }, StatusBar(c), listEl);
 }
 
 function RowDetail(c, rid) {
@@ -700,7 +742,8 @@ function Cell(c, k, r, lists) {
       return Tags(v || [], set);
     case 'select':
       return h('input', { class: 'cell', value: v || '', list: datalistFor(c, k, lists), autocomplete: 'off',
-        oninput: e => set(e.target.value.trim() ? e.target.value : '') });
+        oninput: e => set(e.target.value.trim() ? e.target.value : ''),
+        onchange: () => { if (k === statusCol(c) && activeStatus(c) !== null) render(); } });
     case 'url': {
       const a = h('a', { class: 'url-go', href: v || '#', target: '_blank', rel: 'noopener', title: 'Open link', hidden: !v }, '↗');
       return h('div', { class: 'cell-url' },
