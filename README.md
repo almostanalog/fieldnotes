@@ -16,24 +16,37 @@ Open <http://localhost:8850>. There is also a `notebook` entry in `.claude/launc
 
 ## Where data lives
 
-Everything is one JSON document (`js/store.js`). Right now it's saved to `localStorage`
-under `notebook.v1`. Each browser has its own copy until Drive sync lands. The gear menu
-on the home screen has **Export backup**, **Restore from backup** and **Reset notebook**,
-plus the theme (match system / light / dark, saved per device as `notebook.theme`).
+Everything is one JSON document (`js/store.js`), saved to `localStorage` under `notebook.v1`
+on every edit. The gear menu has **Export backup**, **Restore from backup**, **Reset notebook**
+and the theme (saved per device as `notebook.theme`).
 
 Each collection has a `color` (one of `COLORS` in `store.js`, mapped to `--c-*` in CSS).
 New collections take the least-used ink; change it from the collection's ⋯ menu.
 
-Planned: a Google Drive adapter behind `load()` / `persist()` that reads and writes one
-`notebook.json` in a Drive folder (scope `drive.file`), with the local copy kept as an
-offline cache. After that, host the static files on GitHub Pages so the phone can install it
-to the home screen.
+## Google Drive sync
+
+Gear menu → **Connect Google Drive**. The notebook becomes `Fieldnotes/fieldnotes.json` in
+Drive (`js/drive.js`), with the `drive.file` permission only, so the app sees nothing else.
+
+- Sign-in is Google's browser-only OAuth redirect (no server, no client secret). The token
+  lasts about an hour; after that the app quietly asks Google again (`prompt=none`) when it
+  opens if the last sync is over 20 hours old, or when you tap **Sync now**.
+- Syncs: on open, ~4 s after an edit, when the app is hidden or comes back, and every 10 min.
+- Merging (`js/merge.js`) is three-way against the copy from the last sync, so edits made on
+  two devices between syncs both survive. Only the very same field edited on both sides
+  conflicts, and then the device doing the sync wins. An edit beats a deletion.
+- A device's first sync with an untouched notebook just takes the Drive copy.
+- Google Cloud project "Fieldnotes": OAuth client "Fieldnotes web", testing mode, the owner
+  is the only test user. Redirect URIs: `https://almostanalog.github.io/fieldnotes/` and
+  `http://localhost:8850/`.
 
 ## Files
 
 | File | What it holds |
 |---|---|
 | `js/store.js` | The document, persistence, templates (Books, Ideas, …), cell value conversion |
+| `js/drive.js` | Google sign-in, Drive file read/write, sync scheduling |
+| `js/merge.js` | Three-way merge of two notebook copies |
 | `js/app.js` | Hash router and every view: home grid, search, notes, list, table, row detail |
 | `js/md.js` | Markdown renderer for pages, plus HTML → Markdown for pasting |
 | `js/csv.js` | CSV parse/export, column type inference, Notion import matching |

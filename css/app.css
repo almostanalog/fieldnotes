@@ -51,9 +51,7 @@ a { color: inherit; }
 
 .page { max-width: 1240px; margin: 0 auto; padding: 0 var(--gutter) 64px; }
 .grow { flex: 1; }
-.meta, .sync { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--ink-2); white-space: nowrap; }
-.sync::before { content: ''; display: inline-block; width: 8px; height: 8px; background: var(--cyan); border: 1.5px solid var(--ink); margin-right: 7px; vertical-align: -1px; }
-.sync.err::before { background: var(--danger); }
+.meta { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--ink-2); white-space: nowrap; }
 
 /* ---- controls ---- */
 
@@ -105,6 +103,8 @@ input.tr-title:focus { text-decoration: underline; text-decoration-thickness: 2p
 .gear { flex: none; width: 40px; border: var(--b) solid var(--ink); background: var(--paper); box-shadow: 3px 3px 0 var(--ink); cursor: pointer; display: grid; place-items: center; padding: 0; transition: transform .08s, box-shadow .08s; }
 .gear svg { width: 20px; height: 20px; }
 .gear:hover { background: var(--cyan-pale); }
+.gear.attn { position: relative; }
+.gear.attn::after { content: ''; position: absolute; top: -5px; right: -5px; width: 10px; height: 10px; background: var(--c-orange); border: 1.5px solid var(--ink); }
 .gear:active, .gear[aria-expanded="true"] { transform: translate(3px, 3px); box-shadow: none; }
 
 

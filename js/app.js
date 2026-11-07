@@ -1,12 +1,14 @@
 import * as S from './store.js';
 import * as MD from './md.js';
 import { parseCSV, toCSV, importRows } from './csv.js';
+import * as D from './drive.js';
 import { h, pad2, fmtDate, autosize, modal, menu, toast, pickFile, download } from './ui.js';
 
 const root = document.getElementById('app');
 const narrowMQ = matchMedia('(max-width: 719px)');
 const ui = { query: '', filter: {}, showDone: {}, pendingRow: null, focus: null };
 
+const signedIn = D.takeRedirect();   // returning from Google sign-in: read the token off the URL first
 S.load();
 S.onChange(render);
 addEventListener('hashchange', () => {
@@ -17,7 +19,10 @@ addEventListener('hashchange', () => {
 narrowMQ.addEventListener('change', render);
 addEventListener('pagehide', S.flush);
 document.addEventListener('visibilitychange', () => { if (document.hidden) S.flush(); });
-document.addEventListener('nb:saved', () => document.querySelectorAll('.sync').forEach(paintSync));
+document.addEventListener('nb:sync', () => {
+  document.querySelectorAll('.gear').forEach(g => g.classList.toggle('attn', ['signin', 'error'].includes(D.sync.state)));
+  if (D.sync.state === 'error') toast('Sync failed: ' + D.sync.error);
+});
 
 // ---- routing ----------------------------------------------------------------
 // #/                      home
@@ -67,18 +72,14 @@ function dropAbandonedRow(r) {
 // ---- shared bits ----------------------------------------------------------------
 
 function statusText() {
-  const st = S.status;
-  if (st.error) return 'Save failed';
-  return st.saved ? `Saved ${fmtDate(st.saved)}` : 'On this device';
-}
-function paintSync(el) {
-  el.textContent = statusText();
-  el.classList.toggle('err', !!S.status.error);
-}
-function SyncBadge() {
-  const el = h('span', { class: 'sync', title: 'Saved in this browser. Google Drive sync comes next.' });
-  paintSync(el);
-  return el;
+  if (S.status.error) return 'Couldn’t save on this device';
+  if (!D.connected()) return 'Saved on this device only';
+  switch (D.sync.state) {
+    case 'busy': return 'Syncing with Google Drive…';
+    case 'signin': return 'Drive sync paused. Sync now to sign in';
+    case 'error': return 'Sync failed: ' + D.sync.error;
+    default: return D.lastSynced() ? `Synced with Drive ${fmtDate(D.lastSynced(), true)}` : 'Google Drive connected';
+  }
 }
 
 function summary(c) {
@@ -133,7 +134,7 @@ function Masthead(onSearch) {
       e.target.blur();
     },
   });
-  const gear = h('button', { class: 'gear', title: 'Settings', 'aria-label': 'Settings', 'aria-haspopup': 'menu',
+  const gear = h('button', { class: 'gear' + (['signin', 'error'].includes(D.sync.state) ? ' attn' : ''), title: 'Settings', 'aria-label': 'Settings', 'aria-haspopup': 'menu',
     onclick: e => gearMenu(e.currentTarget) });
   gear.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>';
   const logo = h('a', { class: 'logo-note', href: '#/', title: 'All collections', 'aria-label': 'All collections',
@@ -173,12 +174,22 @@ function gearMenu(anchor) {
     { label: 'Match system', checked: t === 'system', action: () => setTheme('system') },
     { label: 'Light', checked: t === 'light', action: () => setTheme('light') },
     { label: 'Dark', checked: t === 'dark', action: () => setTheme('dark') },
+    { head: 'Google Drive' },
+    ...(D.connected()
+      ? [{ label: 'Sync now', action: D.syncOrSignIn },
+         { label: 'Disconnect Drive', action: () => {
+           if (!confirm('Stop syncing this device with Google Drive?\n\nYour notebook stays here and in Drive. You can connect again any time.')) return;
+           D.disconnect();
+           toast('Drive disconnected');
+         } }]
+      : [{ label: 'Connect Google Drive', action: () => D.signIn() }]),
     { sep: true },
     { label: 'Export backup', action: exportJSON },
     { label: 'Restore from backup', action: importJSON },
     { sep: true },
     { label: 'Reset notebook', danger: true, action: () => {
-      if (!confirm('Erase every collection and start over with an empty notebook?\n\nExport a backup first if you might want any of it back.')) return;
+      const where = D.connected() ? ' This also erases the copy in Google Drive.' : '';
+      if (!confirm(`Erase every collection and start over with an empty notebook?${where}\n\nExport a backup first if you might want any of it back.`)) return;
       S.reset();
       ui.query = '';
       ui.filter = {};
@@ -834,3 +845,10 @@ document.addEventListener('keydown', e => {
 });
 
 render();
+if (signedIn === 'retry') D.signIn();
+else {
+  if (signedIn === 'connected') toast('Google Drive connected. Your notebook is in a Fieldnotes folder.');
+  if (signedIn === 'denied') toast('Drive not connected: permission was declined');
+  if (signedIn === 'failed') toast('Google sign-in didn’t work. Try again from the gear menu.');
+  D.start();
+}

@@ -1,6 +1,6 @@
 // Notebook data layer. One JSON document holds everything; this module owns it.
-// Today it persists to localStorage. The Google Drive adapter will slot in behind
-// load()/persist() without the views changing.
+// It persists to localStorage on every edit; js/drive.js syncs that copy with Google
+// Drive and hands merged results back through adopt().
 
 const KEY = 'notebook.v1';
 
@@ -36,6 +36,15 @@ export function load() {
   return state;
 }
 
+// Swap in a document produced by sync. Saves it here and redraws without marking it as a
+// local edit (it already matches Drive).
+export function adopt(next) {
+  state = next;
+  state.collections.forEach(normalize);
+  persist();
+  listeners.forEach(fn => fn());
+}
+
 export function reset() {
   state = seed();
   state.collections.forEach(normalize);
@@ -56,7 +65,9 @@ export const onChange = fn => listeners.add(fn);
 // rerender=false for keystroke-level edits, so the focused input survives.
 export function commit(rerender = true) {
   state.updated = now();
+  delete state.pristine;
   status.dirty = true;
+  document.dispatchEvent(new CustomEvent('nb:edited'));   // drive.js schedules an upload
   clearTimeout(saveTimer);
   saveTimer = setTimeout(persist, 350);
   if (rerender) listeners.forEach(fn => fn());
@@ -77,6 +88,7 @@ function persist() {
   }
   document.dispatchEvent(new CustomEvent('nb:saved'));
 }
+export const persistNow = () => { clearTimeout(saveTimer); persist(); };
 
 export function replaceAll(next) {
   if (!next || !Array.isArray(next.collections)) throw new Error('Not a notebook backup');
@@ -202,7 +214,9 @@ Pasting from Notion, Google Docs or a web page keeps headings, lists, bold and l
 Delete this page whenever you like.`;
 
 function seed() {
-  state = { version: 1, created: now(), updated: now(), collections: [] };
+  // pristine: nobody has touched it yet. On a device's first sync a pristine notebook
+  // is simply replaced by the Drive copy instead of merged into it (no duplicate Books).
+  state = { version: 1, created: now(), updated: now(), pristine: true, collections: [] };
   createCollection('Books', 'table', TEMPLATES.books.make());
   const ideas = createCollection('Ideas', 'notes', { layout: 'cards' });
   ideas.notes.push({ id: uid(), title: 'How this notebook works', body: WELCOME, created: now(), updated: now() });
