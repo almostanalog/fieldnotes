@@ -14,6 +14,13 @@ python -m http.server 8850 --directory notebook
 
 Open <http://localhost:8850>. There is also a `notebook` entry in `.claude/launch.json`.
 
+## Releasing
+
+Run `python tools/stamp.py` before every commit that goes to GitHub Pages. It stamps a fresh
+`?v=` on the stylesheet and every script (scripts via an import map in `index.html`), so
+browsers fetch new files instead of reusing cached ones. On open, the app also re-fetches
+`index.html` uncached and reloads once if a newer stamp is out (`checkForUpdate` in `app.js`).
+
 ## Where data lives
 
 Everything is one JSON document (`js/store.js`), saved to `localStorage` under `notebook.v1`

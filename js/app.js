@@ -992,6 +992,23 @@ function importJSON() {
   });
 }
 
+// ---- updates ----------------------------------------------------------------------
+// tools/stamp.py puts a version on every file URL at each release. The index page itself can
+// still come from the browser's cache, so on open, fetch it fresh and reload once if a newer
+// version is out.
+
+function checkForUpdate() {
+  const mine = new URL(import.meta.url).searchParams.get('v');
+  if (!mine || !navigator.onLine) return;
+  fetch('./index.html', { cache: 'no-store' }).then(r => r.ok ? r.text() : '').then(html => {
+    const live = html.match(/app\.js\?v=(\w+)/)?.[1];
+    if (!live || live === mine) return;
+    try { if (sessionStorage.getItem('notebook.reloadedFor') === live) return; sessionStorage.setItem('notebook.reloadedFor', live); } catch {}
+    S.flush();
+    location.reload();
+  }).catch(() => {});
+}
+
 // ---- keyboard ---------------------------------------------------------------------
 
 document.addEventListener('keydown', e => {
@@ -1008,6 +1025,7 @@ document.addEventListener('keydown', e => {
 });
 
 render();
+checkForUpdate();
 if (signedIn === 'retry') D.signIn();
 else {
   if (signedIn === 'connected') toast('Google Drive connected. Your notebook is in a Fieldnotes folder.');
