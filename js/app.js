@@ -486,8 +486,8 @@ function IdeaCards(c, r, tools) {
     const notes = [...c.notes]
       .filter(n => !group || (n.group || '').trim() === group)
       .filter(n => !q || (n.title + '\n' + n.body + '\n' + (n.group || '')).toLowerCase().includes(q))
-      .sort((a, b) => b.created - a.created);
-    grid.replaceChildren(...(q ? [] : [capture]), ...notes.map(n => IdeaCard(c, n)),
+      .sort((a, b) => rankOf(b) - rankOf(a));
+    grid.replaceChildren(...(q ? [] : [capture]), ...notes.map(n => IdeaCard(c, n, notes)),
       ...(q && !notes.length ? [h('div', { class: 'empty-state small' }, 'No ideas match.')] : []));
   };
   fill();
@@ -496,14 +496,35 @@ function IdeaCards(c, r, tools) {
   return h('div', {}, GroupBar(c), grid);
 }
 
-function IdeaCard(c, n) {
+// Idea cards sit newest first until you drag them. A dragged card gets a rank between its
+// new neighbours; cards never dragged rank by when they were made.
+const rankOf = n => n.rank ?? n.created;
+let ideaDrag = null;
+function dropIdea(c, shownList, target) {
+  const from = shownList.indexOf(ideaDrag), to = shownList.indexOf(target);
+  if (from < 0 || to < 0 || from === to) return;
+  const list = shownList.filter(x => x !== ideaDrag);
+  list.splice(to, 0, ideaDrag);
+  const i = list.indexOf(ideaDrag), above = list[i - 1], below = list[i + 1];
+  ideaDrag.rank = above && below ? (rankOf(above) + rankOf(below)) / 2
+    : above ? rankOf(above) - 1000 : rankOf(below) + 1000;
+  S.touch(c);
+  S.commit();
+}
+
+function IdeaCard(c, n, shownList = []) {
   const title = headline(n);
   const g = !activeGroup(c) && (n.group || '').trim();
   // When the title came from the first line of the text, don't repeat that line underneath.
   const lines = (n.body || '').split('\n');
   const bodyLines = n.title.trim() ? lines : lines.slice(lines.findIndex(l => l.trim()) + 1);
   const body = MD.plain(bodyLines.join('\n'));
-  return h('a', { class: 'card idea', href: `#/c/${c.id}/n/${n.id}` },
+  return h('a', { class: 'card idea', href: `#/c/${c.id}/n/${n.id}`, draggable: 'true',
+    ondragstart: e => { ideaDrag = n; e.dataTransfer.effectAllowed = 'move'; e.currentTarget.classList.add('dragging'); },
+    ondragend: e => { e.currentTarget.classList.remove('dragging'); ideaDrag = null; },
+    ondragover: e => { if (ideaDrag && ideaDrag !== n) { e.preventDefault(); e.currentTarget.classList.add('drop'); } },
+    ondragleave: e => e.currentTarget.classList.remove('drop'),
+    ondrop: e => { e.preventDefault(); e.currentTarget.classList.remove('drop'); if (ideaDrag) dropIdea(c, shownList, n); } },
     h('div', { class: 'card-top' }, g ? h('span', { class: 'card-group' }, g) : h('span', {}, dayLabel(n.created)),
       g && h('span', {}, dayLabel(n.created))),
     h('div', { class: 'idea-title' }, title),
