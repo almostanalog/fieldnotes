@@ -343,6 +343,13 @@ function collMenu(anchor, c) {
     c.type === 'table' && { label: 'Export CSV', action: () => download(`${c.name || 'table'}.csv`,
       toCSV([c.columns.map(k => k.name), ...c.rows.map(r => c.columns.map(k => S.toText(r.cells[k.id], k.type)))]), 'text/csv') },
     c.type === 'table' && { label: 'Add column', action: () => editColumn(c, null) },
+    c.type === 'notes' && { label: 'Import ideas', action: () => pickFile('.json,.txt,.md,application/json,text/plain', async f => {
+      try {
+        const n = importIdeas(c, f, await f.text());
+        S.commit();
+        toast(n ? `Imported ${n} ideas` : 'No ideas found in that file');
+      } catch (e) { alert('Could not read that file: ' + e.message); }
+    }) },
     c.type === 'notes' && { label: c.layout === 'cards' ? 'Show as page list' : 'Show as cards', action: () => {
       c.layout = c.layout === 'cards' ? 'list' : 'cards';
       S.touch(c);
@@ -375,9 +382,57 @@ function dayLabel(ts) {
   return fmtDate(ts);
 }
 
+// Idea cards can carry a group ("3D printing", "Games"…). Groups appear as chips above the
+// cards, in the order they were first used; the chosen chip is remembered per device.
+const groupsOf = c => [...new Set(c.notes.map(n => (n.group || '').trim()).filter(Boolean))];
+function activeGroup(c) {
+  const v = shown[c.id];
+  return v && groupsOf(c).includes(v) ? v : null;
+}
+function GroupBar(c) {
+  const gs = groupsOf(c);
+  if (!gs.length) return null;
+  const cur = activeGroup(c);
+  const count = g => c.notes.filter(n => (n.group || '').trim() === g).length;
+  const chip = (label, v, n) => h('button', { class: 'st-chip' + (cur === v ? ' on' : ''), 'aria-pressed': String(cur === v),
+    onclick: () => setShown(c, v) }, label, h('span', { class: 'st-n' }, n));
+  return h('div', { class: 'status-bar', role: 'group', 'aria-label': 'Show group' },
+    chip('All', null, c.notes.length), gs.map(g => chip(g, g, count(g))));
+}
+
+// Import ideas from a file: JSON ({ ideas: [{ title, body, group }] } or a plain array), or
+// text where blank lines separate ideas and "## Name" lines start a group. Added, never replaced.
+function importIdeas(c, file, text) {
+  let items = [];
+  if (/\.json$/i.test(file.name) || /^\s*[\[{]/.test(text)) {
+    const d = JSON.parse(text);
+    items = (Array.isArray(d) ? d : d.ideas || []).map(x => typeof x === 'string' ? { title: x } : x);
+  } else {
+    let group = '';
+    for (const block of text.replace(/\r/g, '').split(/\n\s*\n/)) {
+      const lines = block.split('\n').filter(l => l.trim());
+      if (!lines.length) continue;
+      if (/^#{1,3}\s/.test(lines[0])) { group = lines.shift().replace(/^#+\s*/, '').trim(); if (!lines.length) continue; }
+      items.push({ title: lines[0].replace(/^\s*[-*•]\s*/, '').trim(), body: lines.slice(1).join('\n').trim(), group });
+    }
+  }
+  const now = Date.now();
+  items = items.filter(x => (x.title || '').trim() || (x.body || '').trim());
+  items.forEach((x, i) => {
+    const n = S.newNote(c);
+    n.title = (x.title || '').trim();
+    n.body = (x.body || '').trim();
+    if ((x.group || '').trim()) n.group = x.group.trim();
+    n.created = n.updated = now - i;          // keeps the file's order, first idea first
+  });
+  S.touch(c);
+  return items.length;
+}
+
 function IdeaCards(c, r, tools) {
   const cur = r.sub === 'n' ? c.notes.find(n => n.id === r.sid) : null;
   if (cur) return h('div', { class: 'idea-open' }, NoteEditor(c, cur, { inside: true }));
+  const group = activeGroup(c);
 
   const save = () => {
     const text = cap.value.trim();
@@ -386,6 +441,7 @@ function IdeaCards(c, r, tools) {
     const n = S.newNote(c);
     n.title = first.trim();
     n.body = rest.join('\n').trim();
+    if (group) n.group = group;
     ui.focus = '.capture-input';
     S.commit();
   };
@@ -395,7 +451,7 @@ function IdeaCards(c, r, tools) {
       if (e.key === 'Escape') { cap.value = ''; cap.blur(); }
     } });
   const capture = h('div', { class: 'card capture', onclick: e => { if (e.target === e.currentTarget) cap.focus(); } },
-    h('div', { class: 'card-top' }, h('span', {}, 'New idea'),
+    h('div', { class: 'card-top' }, h('span', {}, group ? 'New · ' + group : 'New idea'),
       h('button', { class: 'capture-save', onclick: save, title: 'Save idea (Enter)' }, 'Save ↵')),
     cap);
 
@@ -403,7 +459,8 @@ function IdeaCards(c, r, tools) {
   const fill = () => {
     const q = (ui.filter[c.id] || '').trim().toLowerCase();
     const notes = [...c.notes]
-      .filter(n => !q || (n.title + '\n' + n.body).toLowerCase().includes(q))
+      .filter(n => !group || (n.group || '').trim() === group)
+      .filter(n => !q || (n.title + '\n' + n.body + '\n' + (n.group || '')).toLowerCase().includes(q))
       .sort((a, b) => b.created - a.created);
     grid.replaceChildren(...(q ? [] : [capture]), ...notes.map(n => IdeaCard(c, n)),
       ...(q && !notes.length ? [h('div', { class: 'empty-state small' }, 'No ideas match.')] : []));
@@ -411,17 +468,19 @@ function IdeaCards(c, r, tools) {
   fill();
   tools.push(h('input', { class: 'filter', type: 'search', placeholder: 'Filter', 'aria-label': 'Filter ideas',
     value: ui.filter[c.id] || '', oninput: e => { ui.filter[c.id] = e.target.value; fill(); } }));
-  return grid;
+  return h('div', {}, GroupBar(c), grid);
 }
 
 function IdeaCard(c, n) {
   const title = headline(n);
+  const g = !activeGroup(c) && (n.group || '').trim();
   // When the title came from the first line of the text, don't repeat that line underneath.
   const lines = (n.body || '').split('\n');
   const bodyLines = n.title.trim() ? lines : lines.slice(lines.findIndex(l => l.trim()) + 1);
   const body = MD.plain(bodyLines.join('\n'));
   return h('a', { class: 'card idea', href: `#/c/${c.id}/n/${n.id}` },
-    h('div', { class: 'card-top' }, h('span', {}, dayLabel(n.created))),
+    h('div', { class: 'card-top' }, g ? h('span', { class: 'card-group' }, g) : h('span', {}, dayLabel(n.created)),
+      g && h('span', {}, dayLabel(n.created))),
     h('div', { class: 'idea-title' }, title),
     body && h('div', { class: 'idea-body' }, body));
 }
@@ -500,10 +559,21 @@ function NoteEditor(c, n, opts = {}) {
     render();
   };
   if (n.body.trim()) view(); else { out.hidden = true; toggle.textContent = 'Done'; requestAnimationFrame(() => autosize(ta)); }
+  let groupField = null;
+  if (c.layout === 'cards') {
+    const dlId = 'dl-groups-' + c.id;
+    document.getElementById(dlId)?.remove();
+    document.body.append(h('datalist', { id: dlId }, groupsOf(c).map(g => h('option', { value: g }))));
+    groupField = h('input', { class: 'field group-field', value: n.group || '', placeholder: 'Group', list: dlId,
+      'aria-label': 'Group', autocomplete: 'off',
+      oninput: e => { const v = e.target.value.trim(); if (v) n.group = v; else delete n.group; save(); },
+      onkeydown: e => { if (e.key === 'Enter') e.target.blur(); } });
+  }
   return h('article', { class: 'note-editor' },
     h('div', { class: 'note-tools' },
       !opts.inside && h('a', { class: 'back only-narrow', href: `#/c/${c.id}` }, '← All pages'),
       h('span', { class: 'meta' }, 'Edited ' + fmtDate(n.updated, true)),
+      groupField,
       h('span', { class: 'grow' }),
       toggle,
       h('button', { class: 'btn small ghost danger', onclick: del }, 'Delete')),
