@@ -83,18 +83,11 @@ function statusText() {
 }
 
 function summary(c) {
-  if (c.type === 'table') {
-    const k = c.columns[0];
-    return { count: c.rows.length, unit: c.rows.length === 1 ? 'row' : 'rows',
-      preview: c.rows.slice(-4).reverse().map(r => S.toText(r.cells[k?.id], k?.type) || 'Untitled') };
-  }
-  if (c.type === 'list') {
-    const open = c.items.filter(i => !i.done);
-    return { count: open.length, unit: 'open', preview: open.slice(0, 4).map(i => '□ ' + i.text) };
-  }
-  const ns = [...c.notes].sort((a, b) => b.updated - a.updated);
-  const unit = c.layout === 'cards' ? (ns.length === 1 ? 'card' : 'cards') : (ns.length === 1 ? 'page' : 'pages');
-  return { count: ns.length, unit, preview: ns.slice(0, 4).map(headline) };
+  if (c.type === 'table') return { count: c.rows.length, unit: c.rows.length === 1 ? 'row' : 'rows' };
+  if (c.type === 'list') return { count: c.items.filter(i => !i.done).length, unit: 'open' };
+  const n = c.notes.length;
+  const unit = c.layout === 'cards' ? (n === 1 ? 'card' : 'cards') : (n === 1 ? 'page' : 'pages');
+  return { count: n, unit };
 }
 
 const inkOf = c => ({ '--card': `var(--c-${c.color || 'cyan'})` });
@@ -141,7 +134,7 @@ function Masthead(onSearch) {
     onclick: () => { ui.query = ''; } });
   // A sticky note: hard offset shadow, folded bottom-right corner.
   logo.innerHTML = '<svg viewBox="0 0 44 44" aria-hidden="true">'
-    + '<path d="M5 5H41V31L31 41H5Z" style="fill:var(--ink)"/>'
+    + '<path d="M5 5H41V31L31 41H5Z" style="fill:var(--shadow)"/>'
     + '<path d="M2 2H38V28L28 38H2Z" style="fill:var(--c-yellow);stroke:#151515;stroke-width:2;stroke-linejoin:round"/>'
     + '<path d="M38 28H28V38Z" style="fill:#E3B13C;stroke:#151515;stroke-width:2;stroke-linejoin:round"/>'
     + '</svg>';
@@ -225,8 +218,7 @@ function Card(c) {
     },
   },
     h('div', { class: 'card-top' }, h('span', {}, S.TYPES[c.type]), h('span', {}, `${pad2(sm.count)} ${sm.unit}`)),
-    h('div', { class: 'card-name' }, c.name || 'Untitled'),
-    h('ul', { class: 'card-preview' }, sm.preview.map(t => h('li', {}, t))));
+    h('div', { class: 'card-name' }, c.name || 'Untitled'));
 }
 
 function snippet(text, q) {
