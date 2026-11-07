@@ -384,20 +384,45 @@ function dayLabel(ts) {
 
 // Idea cards can carry a group ("3D printing", "Games"…). Groups appear as chips above the
 // cards, in the order they were first used; the chosen chip is remembered per device.
-const groupsOf = c => [...new Set(c.notes.map(n => (n.group || '').trim()).filter(Boolean))];
+// Groups made with "+ Group" are kept in c.groups so they show before any idea is in them.
+const groupsOf = c => [...new Set([...(c.groups || []), ...c.notes.map(n => (n.group || '').trim())].filter(Boolean))];
 function activeGroup(c) {
   const v = shown[c.id];
   return v && groupsOf(c).includes(v) ? v : null;
 }
+function addGroup(c) {
+  const name = h('input', { class: 'field', placeholder: 'e.g. Woodworking', 'aria-label': 'Group name',
+    onkeydown: e => { if (e.key === 'Enter') save(); } });
+  const save = () => {
+    const g = name.value.trim();
+    if (!g) return name.focus();
+    if (!groupsOf(c).includes(g)) { c.groups = [...(c.groups || []), g]; S.touch(c); S.commit(false); }
+    close();
+    setShown(c, g);
+  };
+  const close = modal('New group', h('label', { class: 'flabel' }, 'Name', name),
+    [['Cancel', () => close(), 'ghost'], ['Create', save, 'primary']]);
+  name.focus();
+}
+// An empty group can be removed from its own chip.
+function removeGroup(c, g) {
+  c.groups = (c.groups || []).filter(x => x !== g);
+  if (!c.groups.length) delete c.groups;
+  S.touch(c); S.commit(false);
+  setShown(c, null);
+}
 function GroupBar(c) {
   const gs = groupsOf(c);
-  if (!gs.length) return null;
   const cur = activeGroup(c);
   const count = g => c.notes.filter(n => (n.group || '').trim() === g).length;
   const chip = (label, v, n) => h('button', { class: 'st-chip' + (cur === v ? ' on' : ''), 'aria-pressed': String(cur === v),
     onclick: () => setShown(c, v) }, label, h('span', { class: 'st-n' }, n));
   return h('div', { class: 'status-bar', role: 'group', 'aria-label': 'Show group' },
-    chip('All', null, c.notes.length), gs.map(g => chip(g, g, count(g))));
+    gs.length > 0 && chip('All', null, c.notes.length),
+    gs.map(g => chip(g, g, count(g))),
+    cur && !count(cur) && h('button', { class: 'st-chip ghost', title: `Remove the empty “${cur}” group`,
+      onclick: () => removeGroup(c, cur) }, '✕ Remove'),
+    h('button', { class: 'st-chip ghost', onclick: () => addGroup(c) }, '+ Group'));
 }
 
 // Import ideas from a file: JSON ({ ideas: [{ title, body, group }] } or a plain array), or

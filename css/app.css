@@ -295,6 +295,8 @@ input.cell.empty:not(:focus) { color: var(--ink-3); }
 .st-chip:hover { background: var(--paper-2); }
 .st-chip.on { background: var(--ink); color: var(--paper); }
 .st-n { font-weight: 400; opacity: .6; }
+.st-chip.ghost { border-style: dashed; box-shadow: none; color: var(--ink-2); }
+.st-chip.ghost:hover { color: var(--ink); background: var(--paper-2); }
 
 .card-group { overflow: hidden; text-overflow: ellipsis; }
 .group-field { width: 180px; padding: 4px 8px; font-size: 12px; }
