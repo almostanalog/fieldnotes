@@ -244,7 +244,7 @@ input.tr-title:focus { text-decoration: underline; text-decoration-thickness: 2p
 th:hover .th-more { opacity: 1; }
 .grid-table td { border: 1.5px solid var(--ink); padding: 0; vertical-align: top; }
 .grid-table tbody tr:hover td { background: var(--paper-2); }
-.grid-table td:first-child { min-width: 240px; }
+.grid-table td:first-child { min-width: 360px; }
 .grid-table td:first-child .cell { font-weight: 700; }
 .t-text { min-width: 160px; }
 .t-number { width: 96px; }
@@ -266,12 +266,12 @@ input.cell.empty:not(:focus) { color: var(--ink-3); }
 .cell-url { display: flex; align-items: flex-start; }
 .url-go { padding: 7px 10px; text-decoration: none; font-weight: 700; }
 .url-go:hover { background: var(--cyan); color: #151515; }
-.rating { display: flex; gap: 4px; padding: 10px; }
-.pip { width: 15px; height: 15px; border: var(--b) solid var(--ink); background: transparent; padding: 0; cursor: pointer; }
-.pip:hover { background: var(--cyan-pale); }
-.pip.on { background: var(--ink); }
+.rating { display: flex; gap: 3px; padding: 11px 10px; }
+.pip { width: 12px; height: 12px; border: 1px solid var(--ink-3); background: transparent; padding: 0; cursor: pointer; }
+.pip:hover { border-color: var(--ink); }
+.pip.on { background: var(--c-yellow); border-color: var(--ink); }
 .tags { display: flex; flex-wrap: wrap; gap: 4px; cursor: text; min-height: 34px; padding: 7px 8px; outline: none; }
-.chip { border: 1.5px solid var(--ink); padding: 0 6px; font-size: 11px; line-height: 17px; background: var(--cyan-pale); white-space: nowrap; }
+.chip { border: 1.5px solid var(--ink); padding: 0 6px; font-size: 11px; line-height: 17px; background: var(--tag, var(--cyan-pale)); color: #151515; white-space: nowrap; }
 .tag-input { border: 0; background: none; outline: none; width: 100%; font-size: 13px; padding: 0 2px; }
 .placeholder { color: var(--ink-3); }
 

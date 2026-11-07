@@ -739,7 +739,7 @@ function Cell(c, k, r, lists) {
     case 'rating':
       return Rating(v || 0, set);
     case 'tags':
-      return Tags(v || [], set);
+      return Tags(v || [], set, tagInks(c, k, lists));
     case 'select':
       return h('input', { class: 'cell', value: v || '', list: datalistFor(c, k, lists), autocomplete: 'off',
         oninput: e => set(e.target.value.trim() ? e.target.value : ''),
@@ -768,11 +768,23 @@ function Rating(val, onSet) {
   return el;
 }
 
-function Tags(val, set) {
+// Tag colours come from the card palette. The most-used tags in a column get the colours
+// first, so the common ones never share one. Worked out once per render per column.
+function tagInks(c, k, lists) {
+  const key = 'tags-' + k.id;
+  if (lists[key]) return lists[key];
+  const n = new Map();
+  for (const r of c.rows) for (const t of r.cells[k.id] || []) n.set(t, (n.get(t) || 0) + 1);
+  const order = [...n.keys()].sort((a, b) => n.get(b) - n.get(a) || a.localeCompare(b));
+  const inks = new Map(order.map((t, i) => [t, `var(--c-${S.COLORS[i % S.COLORS.length]})`]));
+  return (lists[key] = t => inks.get(t) || `var(--c-${S.COLORS[0]})`);
+}
+
+function Tags(val, set, tagInk) {
   let tags = [...val];
   const el = h('div', { class: 'cell tags', tabindex: '0' });
   const show = () => el.replaceChildren(...(tags.length
-    ? tags.map(t => h('span', { class: 'chip' }, t))
+    ? tags.map(t => h('span', { class: 'chip', style: { '--tag': tagInk(t) } }, t))
     : [h('span', { class: 'placeholder' }, '—')]));
   const edit = () => {
     const inp = h('input', { class: 'tag-input', value: tags.join(', '), placeholder: 'tag, tag',
